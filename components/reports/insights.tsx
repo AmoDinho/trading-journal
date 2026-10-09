@@ -31,15 +31,29 @@ const TABS = [
   "Deposits",
 ] as const;
 
+type CashFlowRow = {
+  id: string;
+  accountId: string;
+  type: string;
+  amount: number;
+  time: string;
+  comment: string | null;
+};
+
 export function InsightsReport({
   trades,
   accounts,
+  playbooks,
+  cashFlows,
   timeZone,
 }: {
   trades: TradeRow[];
   accounts: { id: string; name: string }[];
+  playbooks: { id: string; name: string }[];
+  cashFlows: CashFlowRow[];
   timeZone: string;
 }) {
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Insights");
   const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS);
   const filtered = useMemo(
     () => filterTrades(trades, { ...filters, insight: "" }, timeZone),
@@ -89,17 +103,17 @@ export function InsightsReport({
         subtitle={`${accountLabel} · ${filtered.length} trades`}
       />
       <div className="mt-5 flex gap-4 overflow-x-auto border-b border-line text-[13.5px]">
-        {TABS.map((tab) => (
-          <span
-            key={tab}
+        {TABS.map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => setTab(item)}
             className={`shrink-0 pb-2 ${
-              tab === "Insights"
-                ? "border-b-2 border-fg text-fg"
-                : "text-faint"
+              tab === item ? "border-b-2 border-fg text-fg" : "text-faint"
             }`}
           >
-            {tab}
-          </span>
+            {item}
+          </button>
         ))}
       </div>
 
@@ -136,6 +150,18 @@ export function InsightsReport({
         </select>
       </div>
 
+      {tab !== "Insights" ? (
+        <Breakdown
+          tab={tab}
+          trades={filtered}
+          playbooks={playbooks}
+          cashFlows={cashFlows.filter(
+            (f) => !filters.accountId || f.accountId === filters.accountId,
+          )}
+          timeZone={timeZone}
+        />
+      ) : (
+      <>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <section className="rounded-xl bg-surface p-5 ring-1 ring-line">
           <div className="flex items-center justify-between">
@@ -219,7 +245,133 @@ export function InsightsReport({
         href={(id) => `/trades?insight=${id}`}
         linkLabel="View days"
       />
+      </>
+      )}
     </>
+  );
+}
+
+function groupRows(trades: TradeRow[], keyFn: (t: TradeRow) => string) {
+  const map = new Map<string, TradeRow[]>();
+  for (const t of trades) {
+    const key = keyFn(t);
+    const list = map.get(key) ?? [];
+    list.push(t);
+    map.set(key, list);
+  }
+  return [...map.entries()]
+    .map(([key, list]) => {
+      const wins = list.filter((t) => t.net > 0.005).length;
+      const decided = list.filter((t) => Math.abs(t.net) > 0.005).length;
+      return {
+        key,
+        count: list.length,
+        winPct: decided === 0 ? 0 : (wins / decided) * 100,
+        net: list.reduce((s, t) => s + t.net, 0),
+      };
+    })
+    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+}
+
+function Breakdown({
+  tab,
+  trades,
+  playbooks,
+  cashFlows,
+  timeZone,
+}: {
+  tab: string;
+  trades: TradeRow[];
+  playbooks: { id: string; name: string }[];
+  cashFlows: CashFlowRow[];
+  timeZone: string;
+}) {
+  const playbookName = (id: string | null) =>
+    playbooks.find((p) => p.id === id)?.name ?? "Unassigned";
+
+  let rows: { key: string; count: number; winPct: number; net: number }[] = [];
+  if (tab === "Symbols") rows = groupRows(trades, (t) => t.symbol);
+  else if (tab === "Long vs short")
+    rows = groupRows(trades, (t) => (t.side === "short" ? "Short" : "Long"));
+  else if (tab === "Wins vs losses")
+    rows = groupRows(trades, (t) =>
+      t.net > 0.005 ? "Wins" : t.net < -0.005 ? "Losses" : "Breakeven",
+    );
+  else if (tab === "Exit reasons") rows = groupRows(trades, (t) => t.exitReason);
+  else if (tab === "Tags")
+    rows = groupRows(
+      trades.flatMap((t) =>
+        t.tags.length ? t.tags.map((tag) => ({ ...t, _k: tag.name })) : [{ ...t, _k: "Untagged" }],
+      ) as (TradeRow & { _k: string })[],
+      (t) => (t as TradeRow & { _k: string })._k,
+    );
+  else if (tab === "Playbooks")
+    rows = groupRows(trades, (t) => playbookName(t.playbookId));
+  else if (tab === "Day & time")
+    rows = groupRows(trades, (t) =>
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone,
+        weekday: "long",
+      }).format(new Date(t.closeTime)),
+    );
+  else if (tab === "Overview")
+    rows = groupRows(trades, (t) => t.symbol).slice(0, 8);
+  else if (tab === "Deposits") {
+    return (
+      <section className="mt-4 rounded-xl bg-surface p-5 ring-1 ring-line">
+        <h2 className="text-[16px] font-semibold">Deposits</h2>
+        <table className="mt-3 w-full text-left text-[13.5px]">
+          <thead className="text-[11px] tracking-wide text-faint uppercase">
+            <tr>
+              <th className="py-2 font-medium">When</th>
+              <th className="font-medium">Type</th>
+              <th className="font-medium">Amount</th>
+              <th className="font-medium">Comment</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cashFlows.map((f) => (
+              <tr key={f.id} className="border-t border-line">
+                <td className="py-2.5">{new Date(f.time).toLocaleString("en-GB")}</td>
+                <td className="capitalize">{f.type}</td>
+                <td className={`tabular-nums ${moneyClass(f.amount)}`}>
+                  {formatMoney(f.amount)}
+                </td>
+                <td className="text-faint">{f.comment ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mt-4 rounded-xl bg-surface p-5 ring-1 ring-line">
+      <h2 className="text-[16px] font-semibold">{tab}</h2>
+      <table className="mt-3 w-full text-left text-[13.5px]">
+        <thead className="text-[11px] tracking-wide text-faint uppercase">
+          <tr>
+            <th className="py-2 font-medium">Bucket</th>
+            <th className="font-medium">Trades</th>
+            <th className="font-medium">Win %</th>
+            <th className="font-medium">Net</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key} className="border-t border-line">
+              <td className="py-2.5 capitalize">{row.key.replaceAll("_", " ")}</td>
+              <td className="tabular-nums">{row.count}</td>
+              <td className="tabular-nums">{row.winPct.toFixed(1)}%</td>
+              <td className={`tabular-nums ${moneyClass(row.net)}`}>
+                {formatMoney(row.net)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 

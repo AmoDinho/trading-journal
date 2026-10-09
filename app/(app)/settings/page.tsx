@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
+import { SettingsForm } from "@/components/settings/settings-form";
 import { SignOutButton } from "@/components/sign-out-button";
 import { db } from "@/lib/db";
-import { tradingAccount } from "@/lib/db/schema";
+import { tradingAccount, user } from "@/lib/db/schema";
 import { requireSession } from "@/lib/session";
 
 export default async function SettingsPage() {
@@ -11,10 +12,12 @@ export default async function SettingsPage() {
     .select()
     .from(tradingAccount)
     .where(eq(tradingAccount.userId, session.user.id));
-  const timezone =
-    "timezone" in session.user && typeof session.user.timezone === "string"
-      ? session.user.timezone
-      : "Africa/Johannesburg";
+  const [profile] = await db
+    .select({ timezone: user.timezone })
+    .from(user)
+    .where(eq(user.id, session.user.id))
+    .limit(1);
+  const timezone = profile?.timezone ?? "Africa/Johannesburg";
 
   return (
     <>
@@ -33,11 +36,8 @@ export default async function SettingsPage() {
               <dt className="text-faint">Email</dt>
               <dd className="mt-0.5">{session.user.email}</dd>
             </div>
-            <div>
-              <dt className="text-faint">Timezone</dt>
-              <dd className="mt-0.5">{timezone}</dd>
-            </div>
           </dl>
+          <SettingsForm timezone={timezone} />
         </section>
         <section className="rounded-xl bg-surface p-5 ring-1 ring-line">
           <h2 className="text-[13px] font-medium tracking-wide text-faint uppercase">

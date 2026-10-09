@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import {
   CalendarHeatmap,
 } from "@/components/dashboard/calendar";
+import { EdgeScore } from "@/components/dashboard/edge-score";
 import { DailyBars, DrawdownChart, EquityChart } from "@/components/dashboard/spark";
 import { ExitChip } from "@/components/exit-chip";
 import { PageHeader } from "@/components/page-header";
@@ -35,6 +36,7 @@ import {
   TRADE_INSIGHTS,
   type InsightId,
 } from "@/lib/insights";
+import { edgeScore } from "@/lib/edge-score";
 import type { TradeRow } from "@/lib/trade-query";
 
 function ratio(value: number) {
@@ -70,6 +72,7 @@ export function Dashboard({
     [trades, filters, timeZone],
   );
   const kpis = dashboardKpis(filtered, timeZone);
+  const edge = edgeScore(filtered, timeZone);
   const equity = equitySeries(filtered);
   const { peak, maxDrawdown } = equityMeta(equity);
   const byDay = dayNets(filtered, timeZone);
@@ -130,7 +133,7 @@ export function Dashboard({
         action={
           <Link
             href="/import"
-            className="inline-flex items-center gap-2 rounded-lg bg-fg px-3.5 py-2 text-[13.5px] font-medium text-canvas"
+            className="hidden items-center gap-2 rounded-lg bg-fg px-3.5 py-2 text-[13.5px] font-medium text-canvas md:inline-flex"
           >
             Import MT5 report
           </Link>
@@ -239,8 +242,24 @@ export function Dashboard({
         </button>
       </div>
 
+      <div className="mt-4 flex items-end justify-between md:hidden">
+        <div>
+          <p className="text-[11px] tracking-wide text-faint uppercase">
+            Net P&L · {kpis.trades} trades
+          </p>
+          <p className={`text-[32px] font-semibold tabular-nums ${moneyClass(kpis.net)}`}>
+            {formatMasked(kpis.net, hide)}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-[11px] tracking-wide text-faint uppercase">Edge</p>
+          <p className="text-[32px] font-semibold">{edge.score}</p>
+        </div>
+      </div>
+
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Kpi
+          className="hidden md:block"
           label="Net P&L"
           value={formatMasked(kpis.net, hide)}
           tone={kpis.net}
@@ -265,6 +284,7 @@ export function Dashboard({
           hint={`${kpis.greenDays} green · ${kpis.redDays} red days`}
         />
         <Kpi
+          className="hidden md:block"
           label="Avg win / loss"
           value={hide ? "••••" : ratio(kpis.avgWinLoss)}
           tone={kpis.avgWinLoss - 1}
@@ -278,7 +298,9 @@ export function Dashboard({
         />
       </div>
 
-      <section className="mt-4 rounded-xl bg-surface p-5 ring-1 ring-line">
+      <div className="mt-4 hidden gap-4 md:grid lg:grid-cols-2">
+        <div>
+      <section className="rounded-xl bg-surface p-5 ring-1 ring-line">
         <div className="flex items-start justify-between">
           <h2 className="text-[16px] font-semibold">Cumulative P&L</h2>
           <p className="text-[12.5px] text-faint">
@@ -290,6 +312,9 @@ export function Dashboard({
         <p className="mt-3 text-[12px] tracking-wide text-faint uppercase">Drawdown</p>
         <DrawdownChart points={equity} />
       </section>
+        </div>
+        <EdgeScore score={edge.score} axes={edge.axes} blurb={edge.blurb} />
+      </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <CalendarHeatmap
@@ -330,7 +355,7 @@ export function Dashboard({
           </div>
         </section>
       </div>
-      <section className="mt-4 rounded-xl bg-surface p-5 ring-1 ring-line">
+      <section className="mt-4 hidden rounded-xl bg-surface p-5 ring-1 ring-line md:block">
         <h2 className="text-[16px] font-semibold">
           Daily P&L · {monthLabel(month.year, month.index)}
         </h2>
@@ -339,7 +364,7 @@ export function Dashboard({
         </div>
       </section>
 
-      <section className="mt-4 rounded-xl bg-surface p-5 ring-1 ring-line">
+      <section className="mt-4 hidden rounded-xl bg-surface p-5 ring-1 ring-line md:block">
         <div className="flex items-center justify-between">
           <h2 className="text-[16px] font-semibold">Recent trades</h2>
           <Link href="/trades" className="text-[13px] text-[#9ec1ff]">
@@ -384,14 +409,16 @@ function Kpi({
   value,
   hint,
   tone,
+  className = "",
 }: {
   label: string;
   value: string;
   hint: string;
   tone: number;
+  className?: string;
 }) {
   return (
-    <div className="rounded-xl bg-surface px-4 py-4 ring-1 ring-line">
+    <div className={`rounded-xl bg-surface px-4 py-4 ring-1 ring-line ${className}`}>
       <p className="text-[11px] tracking-wide text-faint uppercase">{label}</p>
       <p className={`mt-1 text-[26px] font-semibold tabular-nums ${moneyClass(tone)}`}>
         {value}

@@ -10,7 +10,9 @@ export default async function ReportsPage() {
     "timezone" in session.user && typeof session.user.timezone === "string"
       ? session.user.timezone
       : "Africa/Johannesburg";
-  const { trades, accounts } = await loadTradeLog(session.user.id);
+  const { trades, accounts, playbooks, cashFlows } = await loadTradeLog(
+    session.user.id,
+  );
 
   if (trades.length === 0) {
     return (
@@ -25,6 +27,12 @@ export default async function ReportsPage() {
   }
 
   return (
-    <InsightsReport trades={trades} accounts={accounts} timeZone={timeZone} />
+    <InsightsReport
+      trades={trades}
+      accounts={accounts}
+      playbooks={playbooks}
+      cashFlows={cashFlows}
+      timeZone={timeZone}
+    />
   );
 }

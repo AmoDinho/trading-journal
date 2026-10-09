@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  cashFlow,
   playbook,
   tag,
   trade,
@@ -113,5 +114,23 @@ export async function loadTradeLog(userId: string) {
     .from(tag)
     .where(eq(tag.userId, userId));
 
-  return { trades, accounts, playbooks, tags };
+  const flows = await db
+    .select()
+    .from(cashFlow)
+    .where(eq(cashFlow.userId, userId));
+
+  return {
+    trades,
+    accounts,
+    playbooks,
+    tags,
+    cashFlows: flows.map((f) => ({
+      id: f.id,
+      accountId: f.accountId,
+      type: f.type,
+      amount: Number(f.amount),
+      time: f.time.toISOString(),
+      comment: f.comment,
+    })),
+  };
 }
