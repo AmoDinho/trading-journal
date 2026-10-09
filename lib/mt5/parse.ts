@@ -12,6 +12,73 @@ const IDENTITY = /^(account|name|login|holder|client)\s*:/i;
 const SECTION = /^(positions|orders|deals)$/i;
 const TOTAL_NET = /total net profit\s*:?\s*(.+)$/i;
 
+export function rowsFromCsv(text: string): string[][] {
+  const normalized = text
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+  const sample = normalized.split("\n").find((line) => line.trim()) ?? "";
+  const delimiter = detectDelimiter(sample);
+  return parseCsv(normalized, delimiter);
+}
+
+function detectDelimiter(line: string): string {
+  const counts: Record<string, number> = { ",": 0, ";": 0, "\t": 0 };
+  let inQuotes = false;
+  for (const ch of line) {
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (!inQuotes && counts[ch] != null) counts[ch] += 1;
+  }
+  return (
+    Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? ","
+  );
+}
+
+function parseCsv(text: string, delimiter: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]!;
+    const next = text[i + 1];
+    if (inQuotes) {
+      if (ch === '"' && next === '"') {
+        cell += '"';
+        i += 1;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        cell += ch;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = true;
+      continue;
+    }
+    if (ch === delimiter) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+    if (ch === "\n") {
+      row.push(cell);
+      if (row.some((c) => c.trim())) rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+    cell += ch;
+  }
+  row.push(cell);
+  if (row.some((c) => c.trim())) rows.push(row);
+  return rows;
+}
+
 export function rowsFromHtml(html: string): string[][] {
   const tables = html.match(/<table[\s\S]*?<\/table>/gi) ?? [];
   const rows: string[][] = [];
@@ -57,17 +124,21 @@ export function parseReport(rows: string[][]): ParsedReport {
       continue;
     }
 
+    if (looksLikeHeader(cells)) {
+      const inferred: string | null = inferSection(cells) ?? current;
+      if (inferred) {
+        current = inferred;
+        sections[inferred] = {
+          headers: cells.map((c) => c.toLowerCase()),
+          rows: [],
+        };
+        continue;
+      }
+    }
+
     if (!current) continue;
 
     if (isTotalRow(cells)) continue;
-
-    if (
-      sections[current].headers.length === 0 &&
-      looksLikeHeader(cells)
-    ) {
-      sections[current].headers = cells.map((c) => c.toLowerCase());
-      continue;
-    }
 
     if (sections[current].headers.length > 0) {
       sections[current].rows.push(cells);
@@ -136,6 +207,13 @@ export function parseReport(rows: string[][]): ParsedReport {
     }
   }
 
+  if (trades.length === 0 && dealSection) {
+    const synthesized = tradesFromDeals(dealSection, dealMaps);
+    trades.push(...synthesized.trades);
+    openPositions += synthesized.openPositions;
+    warnings.push(...synthesized.warnings);
+  }
+
   const cashFlows: ParsedCashFlow[] = dealMaps.cashFlows;
   const workingOrders = countWorkingOrders(orderSection);
 
@@ -160,6 +238,16 @@ function detectSection(cells: string[]): string | null {
   const token = (cells.find((c) => c.length > 0) ?? "").trim();
   const m = token.match(SECTION);
   return m ? m[1]!.toLowerCase() : null;
+}
+
+function inferSection(cells: string[]): string | null {
+  const joined = cells.join(" ").toLowerCase();
+  if (joined.includes("deal") && (joined.includes("direction") || joined.includes("balance"))) {
+    return "deals";
+  }
+  if (joined.includes("position") && joined.includes("symbol")) return "positions";
+  if (joined.includes("order") && joined.includes("symbol")) return "orders";
+  return null;
 }
 
 function looksLikeHeader(cells: string[]): boolean {
@@ -202,6 +290,7 @@ function columnIndex(headers: string[]) {
     symbol: first("symbol"),
     type: first("type"),
     volume: first("volume"),
+    price: first("price"),
     openPrice: nth(0, "price"),
     closePrice: nth(1, "price"),
     stopLoss: first("s/l", "sl", "s l"),
@@ -289,9 +378,122 @@ function countWorkingOrders(section?: { headers: string[]; rows: string[][] }) {
   return count;
 }
 
+function tradesFromDeals(
+  section: { headers: string[]; rows: string[][] },
+  dealMaps: ReturnType<typeof indexDeals>,
+) {
+  const col = columnIndex(section.headers);
+  const groups = new Map<
+    string,
+    {
+      symbol: string;
+      side: Side;
+      ins: { volume: number; price: number; time: Date }[];
+      outs: { volume: number; price: number; time: Date }[];
+      profit: number;
+      commission: number;
+      swap: number;
+    }
+  >();
+
+  for (const row of section.rows) {
+    const type = cell(row, col.type).toLowerCase();
+    if (type === "balance" || type === "credit" || type === "charge") continue;
+    const positionId = cell(row, col.position);
+    const symbol = cell(row, col.symbol);
+    const direction = cell(row, col.direction).toLowerCase();
+    const volume = parseNumber(cell(row, col.volume));
+    const price = parseNumber(cell(row, col.price >= 0 ? col.price : col.openPrice));
+    const time = parseMt5Time(cell(row, col.openTime));
+    if (!positionId || !symbol || volume == null || price == null || !time) continue;
+
+    const group = groups.get(positionId) ?? {
+      symbol,
+      side: type.includes("sell") && direction !== "out" ? "short" : "long",
+      ins: [],
+      outs: [],
+      profit: 0,
+      commission: 0,
+      swap: 0,
+    };
+    if (direction === "in" || direction === "in/out") {
+      if (type.includes("sell")) group.side = "short";
+      if (type.includes("buy")) group.side = "long";
+      group.ins.push({ volume, price, time });
+    }
+    if (direction === "out" || direction === "out/in") {
+      group.outs.push({ volume, price, time });
+    }
+    group.profit += parseNumber(cell(row, col.profit)) ?? 0;
+    group.commission += parseNumber(cell(row, col.commission)) ?? 0;
+    group.swap += parseNumber(cell(row, col.swap)) ?? 0;
+    groups.set(positionId, group);
+  }
+
+  const trades: ParsedTrade[] = [];
+  const warnings: ParseWarning[] = [];
+  let openPositions = 0;
+
+  for (const [positionId, group] of groups) {
+    if (group.outs.length === 0) {
+      openPositions += 1;
+      continue;
+    }
+    const volume = round4(group.outs.reduce((s, d) => s + d.volume, 0));
+    const open = vwap(group.ins.length ? group.ins : group.outs);
+    const close = vwap(group.outs);
+    const openTime = group.ins[0]?.time ?? group.outs[0]!.time;
+    const closeTime = group.outs[group.outs.length - 1]!.time;
+    if (group.outs.length > 1) {
+      warnings.push({
+        kind: "partial_close",
+        positionId,
+        dealCount: group.outs.length,
+      });
+    }
+    trades.push({
+      mt5PositionId: positionId,
+      symbol: group.symbol,
+      side: group.side,
+      volume,
+      openTime: openTime.toISOString(),
+      closeTime: closeTime.toISOString(),
+      openPrice: open,
+      closePrice: close,
+      stopLoss: null,
+      takeProfit: null,
+      commission: round2(group.commission),
+      swap: round2(group.swap),
+      profit: round2(group.profit),
+      exitReason: exitReasonFromDeals(dealMaps.outs.get(positionId) ?? []),
+    });
+  }
+
+  return { trades, openPositions, warnings };
+}
+
+function vwap(legs: { volume: number; price: number }[]): number {
+  const total = legs.reduce((s, l) => s + l.volume, 0);
+  if (total === 0) return legs[0]?.price ?? 0;
+  return round2(
+    legs.reduce((s, l) => s + l.volume * l.price, 0) / total,
+  );
+}
+
+function round4(n: number): number {
+  return Math.round(n * 10000) / 10000;
+}
+
 export function parseNumber(value: string): number | null {
-  const t = value.replace(/\s/g, "").replace(/,/g, "");
+  let t = value.replace(/\s/g, "");
   if (!t) return null;
+  if (/\d,\d{1,2}$/.test(t) && !t.includes(".")) {
+    t = t.replace(",", ".");
+  } else if (t.includes(".") && t.includes(",")) {
+    t = t.replace(/\./g, "").replace(",", ".");
+  } else {
+    t = t.replace(/,/g, "");
+  }
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }

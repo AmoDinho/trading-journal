@@ -317,7 +317,7 @@ export function ImportWizard({
         <input
           ref={inputRef}
           type="file"
-          accept=".xlsx,.xls,.csv,.html,.htm"
+          accept=".xlsx,.xls,.csv,.tsv,.txt,.html,.htm,text/csv"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
