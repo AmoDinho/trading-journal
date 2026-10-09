@@ -229,3 +229,24 @@ export const tradeTag = pgTable(
   },
   (table) => [primaryKey({ columns: [table.tradeId, table.tagId] })],
 );
+
+export const journalEntry = pgTable(
+  "journal_entry",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    plan: text("plan").notNull().default(""),
+    happened: text("happened").notNull().default(""),
+    lessons: text("lessons").notNull().default(""),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [uniqueIndex("journal_user_date").on(table.userId, table.date)],
+);
