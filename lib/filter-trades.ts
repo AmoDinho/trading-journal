@@ -8,7 +8,9 @@ export type TradeFilters = {
   symbol: string;
   side: string;
   tagId: string;
+  playbookId: string;
   outcome: string;
+  date: string;
 };
 
 export const EMPTY_FILTERS: TradeFilters = {
@@ -18,7 +20,9 @@ export const EMPTY_FILTERS: TradeFilters = {
   symbol: "",
   side: "",
   tagId: "",
+  playbookId: "",
   outcome: "",
+  date: "",
 };
 
 export function filterTrades(
@@ -34,6 +38,10 @@ export function filterTrades(
     if (filters.symbol && t.symbol !== filters.symbol) return false;
     if (filters.side && t.side !== filters.side) return false;
     if (filters.tagId && !t.tags.some((tag) => tag.id === filters.tagId)) {
+      return false;
+    }
+    if (filters.playbookId && t.playbookId !== filters.playbookId) return false;
+    if (filters.date && dayKey(t.closeTime, timeZone) !== filters.date) {
       return false;
     }
     if (filters.outcome) {

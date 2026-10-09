@@ -29,16 +29,21 @@ export function TradeLog({
   playbooks,
   tags,
   timeZone,
+  initialDate = "",
 }: {
   trades: TradeRow[];
   accounts: { id: string; name: string }[];
   playbooks: { id: string; name: string }[];
   tags: { id: string; category: string; name: string }[];
   timeZone: string;
+  initialDate?: string;
 }) {
   const [trades, setTrades] = useState(initial);
   const [allTags, setAllTags] = useState(tags);
-  const [filters, setFilters] = useState<TradeFilters>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<TradeFilters>({
+    ...EMPTY_FILTERS,
+    date: initialDate,
+  });
   const [openId, setOpenId] = useState<string | null>(null);
   const [cursor, setCursor] = useState(0);
 
@@ -70,8 +75,9 @@ export function TradeLog({
     setTrades((rows) => rows.map((row) => (row.id === next.id ? next : row)));
   }
 
-  const subtitle =
-    filters.redDays && filtered.length !== trades.length
+  const subtitle = filters.date
+    ? `${filtered.length} of ${trades.length} trades · ${filters.date}`
+    : filters.redDays && filtered.length !== trades.length
       ? `${filtered.length} of ${trades.length} trades · red days only`
       : `${filtered.length} of ${trades.length} trades`;
 
@@ -128,6 +134,15 @@ export function TradeLog({
           >
             Days: red only
           </button>
+          {filters.date ? (
+            <button
+              type="button"
+              onClick={() => setFilter("date", "")}
+              className="rounded-lg bg-surface px-3 py-1.5 ring-1 ring-fg/40"
+            >
+              {filters.date} ×
+            </button>
+          ) : null}
           <select
             value={filters.symbol}
             onChange={(e) => setFilter("symbol", e.target.value)}

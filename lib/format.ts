@@ -8,6 +8,10 @@ export function formatMoney(value: number): string {
   return `$${abs}`;
 }
 
+export function formatMasked(value: number, hide: boolean): string {
+  return hide ? "••••" : formatMoney(value);
+}
+
 export function moneyClass(value: number): string {
   if (value < 0) return "text-loss";
   if (value > 0) return "text-profit";
