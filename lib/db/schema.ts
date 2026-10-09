@@ -3,6 +3,7 @@ import {
   integer,
   numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -140,6 +141,9 @@ export const trade = pgTable(
     initialStop: numeric("initial_stop", { precision: 18, scale: 8 }),
     rating: integer("rating"),
     notes: text("notes"),
+    playbookId: text("playbook_id").references(() => playbook.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -179,4 +183,49 @@ export const cashFlow = pgTable(
   (table) => [
     uniqueIndex("cash_flow_account_deal").on(table.accountId, table.mt5DealId),
   ],
+);
+
+export const playbook = pgTable("playbook", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const tag = pgTable(
+  "tag",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    category: text("category").notNull(),
+    name: text("name").notNull(),
+  },
+  (table) => [
+    uniqueIndex("tag_user_category_name").on(
+      table.userId,
+      table.category,
+      table.name,
+    ),
+  ],
+);
+
+export const tradeTag = pgTable(
+  "trade_tag",
+  {
+    tradeId: text("trade_id")
+      .notNull()
+      .references(() => trade.id, { onDelete: "cascade" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tag.id, { onDelete: "cascade" }),
+  },
+  (table) => [primaryKey({ columns: [table.tradeId, table.tagId] })],
 );

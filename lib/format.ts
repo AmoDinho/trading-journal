@@ -70,3 +70,70 @@ export const EXIT_LABEL: Record<string, string> = {
   take_profit: "Take profit",
   manual: "Manual",
 };
+
+export function tradeNet(profit: number, commission: number, swap: number) {
+  return profit + commission + swap;
+}
+
+export function formatHold(openIso: string, closeIso: string): string {
+  const seconds = Math.max(
+    0,
+    Math.round((new Date(closeIso).getTime() - new Date(openIso).getTime()) / 1000),
+  );
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+}
+
+export function rMultiple(
+  side: string,
+  openPrice: number,
+  closePrice: number,
+  initialStop: number | null,
+): number | null {
+  if (initialStop == null) return null;
+  const risk = Math.abs(openPrice - initialStop);
+  if (risk === 0) return null;
+  const move = side === "short" ? openPrice - closePrice : closePrice - openPrice;
+  return move / risk;
+}
+
+export function formatR(value: number | null): string {
+  if (value == null) return "—";
+  const abs = Math.abs(value).toFixed(1);
+  if (value < 0) return `-${abs}R`;
+  if (value > 0) return `+${abs}R`;
+  return "0.0R";
+}
+
+export function formatPrice(value: number): string {
+  if (value >= 100) return value.toFixed(2);
+  if (value >= 10) return value.toFixed(3);
+  return value.toFixed(5);
+}
+
+export function formatVolume(value: number): string {
+  return value.toFixed(2);
+}
+
+export function dayKey(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+export function formatOpened(iso: string): string {
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
