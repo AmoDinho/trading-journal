@@ -1,0 +1,19 @@
+{
+  "positionsInFile": 5,
+  "openPositions": 1,
+  "workingOrders": 1,
+  "cashFlows": 2,
+  "deposits": 1,
+  "withdrawals": 1,
+  "netProfit": -216.3,
+  "reportNetProfit": -216.3,
+  "exitReasons": {
+    "stop_out": 2,
+    "stop_loss": 1,
+    "take_profit": 1,
+    "manual": 1
+  },
+  "partialClosePositionId": "1001",
+  "partialCloseDeals": 3,
+  "mustNotContain": ["SHOULD NEVER APPEAR", "12345"]
+}

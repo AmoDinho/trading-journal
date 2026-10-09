@@ -1,4 +1,12 @@
-import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -75,3 +83,100 @@ export const tradingAccount = pgTable("trading_account", {
   currency: text("currency").notNull().default("USD"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const importBatch = pgTable("import_batch", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  accountId: text("account_id")
+    .notNull()
+    .references(() => tradingAccount.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  format: text("format").notNull(),
+  fileSizeBytes: integer("file_size_bytes").notNull(),
+  parsedMs: integer("parsed_ms").notNull().default(0),
+  positionsInFile: integer("positions_in_file").notNull(),
+  newTrades: integer("new_trades").notNull(),
+  alreadyImported: integer("already_imported").notNull(),
+  newCashFlows: integer("new_cash_flows").notNull(),
+  warnings: integer("warnings").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const trade = pgTable(
+  "trade",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => tradingAccount.id, { onDelete: "cascade" }),
+    importId: text("import_id").references(() => importBatch.id, {
+      onDelete: "set null",
+    }),
+    mt5PositionId: text("mt5_position_id").notNull(),
+    symbol: text("symbol").notNull(),
+    side: text("side").notNull(),
+    volume: numeric("volume", { precision: 12, scale: 4 }).notNull(),
+    openTime: timestamp("open_time", { withTimezone: true }).notNull(),
+    closeTime: timestamp("close_time", { withTimezone: true }).notNull(),
+    openPrice: numeric("open_price", { precision: 18, scale: 8 }).notNull(),
+    closePrice: numeric("close_price", { precision: 18, scale: 8 }).notNull(),
+    stopLoss: numeric("stop_loss", { precision: 18, scale: 8 }),
+    takeProfit: numeric("take_profit", { precision: 18, scale: 8 }),
+    commission: numeric("commission", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    swap: numeric("swap", { precision: 14, scale: 2 }).notNull().default("0"),
+    profit: numeric("profit", { precision: 14, scale: 2 }).notNull(),
+    exitReason: text("exit_reason").notNull(),
+    initialStop: numeric("initial_stop", { precision: 18, scale: 8 }),
+    rating: integer("rating"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("trade_account_position").on(
+      table.accountId,
+      table.mt5PositionId,
+    ),
+  ],
+);
+
+export const cashFlow = pgTable(
+  "cash_flow",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => tradingAccount.id, { onDelete: "cascade" }),
+    importId: text("import_id").references(() => importBatch.id, {
+      onDelete: "set null",
+    }),
+    mt5DealId: text("mt5_deal_id").notNull(),
+    type: text("type").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    time: timestamp("time", { withTimezone: true }).notNull(),
+    comment: text("comment"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("cash_flow_account_deal").on(table.accountId, table.mt5DealId),
+  ],
+);

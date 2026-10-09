@@ -1,28 +1,49 @@
-import { EmptyState } from "@/components/empty-state";
+import { desc, eq } from "drizzle-orm";
+import { ImportWizard } from "@/components/import/wizard";
 import { PageHeader } from "@/components/page-header";
+import { db } from "@/lib/db";
+import { importBatch, tradingAccount } from "@/lib/db/schema";
+import { requireSession } from "@/lib/session";
 
-export default function ImportPage() {
+export default async function ImportPage() {
+  const session = await requireSession();
+  const accounts = await db
+    .select({
+      id: tradingAccount.id,
+      name: tradingAccount.name,
+      serverTz: tradingAccount.serverTz,
+      currency: tradingAccount.currency,
+    })
+    .from(tradingAccount)
+    .where(eq(tradingAccount.userId, session.user.id));
+
+  const pastImports = await db
+    .select({
+      id: importBatch.id,
+      createdAt: importBatch.createdAt,
+      filename: importBatch.filename,
+      format: importBatch.format,
+      positionsInFile: importBatch.positionsInFile,
+      newTrades: importBatch.newTrades,
+      warnings: importBatch.warnings,
+    })
+    .from(importBatch)
+    .where(eq(importBatch.userId, session.user.id))
+    .orderBy(desc(importBatch.createdAt))
+    .limit(20);
+
   return (
     <>
       <PageHeader
         title="Import MT5 report"
         subtitle="Your file is read in this browser. Only trade rows are uploaded."
       />
-      <div className="mt-6 flex gap-2 text-[13px]">
-        {["Choose file", "Preview", "Import"].map((step, i) => (
-          <span
-            key={step}
-            className={`rounded-full px-3 py-1.5 ring-1 ring-line ${
-              i === 0 ? "bg-surface text-fg" : "text-faint"
-            }`}
-          >
-            {i + 1} {step}
-          </span>
-        ))}
-      </div>
-      <EmptyState
-        title="Choose a history report"
-        body="Accepts .xlsx, .csv, and .html from MetaTrader 5. Parsing and preview land in the next slice."
+      <ImportWizard
+        accounts={accounts}
+        pastImports={pastImports.map((row) => ({
+          ...row,
+          createdAt: row.createdAt.toISOString(),
+        }))}
       />
     </>
   );

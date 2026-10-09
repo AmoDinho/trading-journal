@@ -12,6 +12,7 @@ import {
   SettingsIcon,
   TradesIcon,
 } from "@/components/icons";
+import { formatRelative } from "@/lib/format";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: DashboardIcon },
@@ -23,7 +24,13 @@ const nav = [
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
-export function Sidebar({ accountName }: { accountName: string }) {
+export function Sidebar({
+  accountName,
+  lastImport,
+}: {
+  accountName: string;
+  lastImport: { when: string; trades: number; cashFlows: number } | null;
+}) {
   const pathname = usePathname();
 
   return (
@@ -59,8 +66,14 @@ export function Sidebar({ accountName }: { accountName: string }) {
           <p className="text-[10px] font-medium tracking-wider text-faint uppercase">
             Last import
           </p>
-          <p className="mt-1 text-[13px] text-fg">{accountName} · never</p>
-          <p className="text-[12px] text-faint">No reports yet</p>
+          <p className="mt-1 text-[13px] text-fg">
+            {accountName} · {lastImport ? formatRelative(lastImport.when) : "never"}
+          </p>
+          <p className="text-[12px] text-faint">
+            {lastImport
+              ? `${lastImport.trades} positions · ${lastImport.cashFlows} cash flows`
+              : "No reports yet"}
+          </p>
         </div>
       </div>
     </aside>
