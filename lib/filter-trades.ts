@@ -1,4 +1,5 @@
 import { dayKey } from "@/lib/format";
+import { computeInsights, insightTradeIds, type InsightId } from "@/lib/insights";
 import type { TradeRow } from "@/lib/trade-query";
 
 export type TradeFilters = {
@@ -11,6 +12,7 @@ export type TradeFilters = {
   playbookId: string;
   outcome: string;
   date: string;
+  insight: string;
 };
 
 export const EMPTY_FILTERS: TradeFilters = {
@@ -23,6 +25,7 @@ export const EMPTY_FILTERS: TradeFilters = {
   playbookId: "",
   outcome: "",
   date: "",
+  insight: "",
 };
 
 export function filterTrades(
@@ -50,6 +53,19 @@ export function filterTrades(
     }
     return true;
   });
+
+  if (filters.insight) {
+    const result = computeInsights(trades, timeZone);
+    const ids = new Set(
+      insightTradeIds(
+        result,
+        trades,
+        timeZone,
+        filters.insight as InsightId,
+      ),
+    );
+    rows = rows.filter((t) => ids.has(t.id));
+  }
 
   if (filters.redDays) {
     const byDay = new Map<string, number>();

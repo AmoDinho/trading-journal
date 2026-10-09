@@ -13,6 +13,8 @@ import {
   moneyClass,
   rMultiple,
 } from "@/lib/format";
+import { InsightChip } from "@/components/insight-chip";
+import type { TradeInsightId } from "@/lib/insights";
 import type { TradeRow } from "@/lib/trade-query";
 
 const CATEGORIES = [
@@ -32,6 +34,7 @@ export function TradeDrawer({
   onNext,
   onChange,
   onTagCreated,
+  insights = [],
 }: {
   trade: TradeRow;
   index: number;
@@ -43,6 +46,7 @@ export function TradeDrawer({
   onNext: () => void;
   onChange: (next: TradeRow) => void;
   onTagCreated: (tag: { id: string; category: string; name: string }) => void;
+  insights?: TradeInsightId[];
 }) {
   const [notes, setNotes] = useState(trade.notes);
   const [stop, setStop] = useState(trade.initialStop?.toString() ?? "");
@@ -142,6 +146,13 @@ export function TradeDrawer({
         <p className={`mt-1 text-[32px] font-semibold tabular-nums ${moneyClass(trade.net)}`}>
           {formatMoney(trade.net)}
         </p>
+        {insights.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {insights.map((id) => (
+              <InsightChip key={id} id={id} />
+            ))}
+          </div>
+        ) : null}
 
         <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 text-[13.5px]">
           <div>

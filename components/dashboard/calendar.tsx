@@ -9,6 +9,7 @@ export function CalendarHeatmap({
   hide,
   onPrev,
   onNext,
+  stopOutDates,
 }: {
   label: string;
   weeks: WeekRow[];
@@ -16,6 +17,7 @@ export function CalendarHeatmap({
   hide: boolean;
   onPrev: () => void;
   onNext: () => void;
+  stopOutDates?: Set<string>;
 }) {
   const maxAbs = Math.max(
     1,
@@ -83,7 +85,12 @@ export function CalendarHeatmap({
                   }`}
                   style={{ background: bg }}
                 >
-                  <span className="text-[11px] text-faint">{day.day}</span>
+                  <span className="flex items-center justify-between text-[11px] text-faint">
+                    {day.day}
+                    {stopOutDates?.has(day.date) ? (
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber" />
+                    ) : null}
+                  </span>
                   {day.inMonth && day.trades > 0 ? (
                     <>
                       <span
@@ -115,7 +122,10 @@ export function CalendarHeatmap({
           </div>
         ))}
       </div>
-      <p className="mt-3 text-[12px] text-faint">Darker cell = larger day</p>
+      <p className="mt-3 text-[12px] text-faint">
+        <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-amber" />
+        Margin stop-out · Darker cell = larger day
+      </p>
     </section>
   );
 }

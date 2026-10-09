@@ -24,9 +24,17 @@ import {
 import {
   formatCloseTime,
   formatMasked,
+  formatMoney,
   formatVolume,
   moneyClass,
 } from "@/lib/format";
+import {
+  computeInsights,
+  DAY_INSIGHTS,
+  insightTradeIds,
+  TRADE_INSIGHTS,
+  type InsightId,
+} from "@/lib/insights";
 import type { TradeRow } from "@/lib/trade-query";
 
 function ratio(value: number) {
@@ -72,6 +80,34 @@ export function Dashboard({
   );
   const recent = filtered.slice(0, 8);
   const symbols = [...new Set(trades.map((t) => t.symbol))].sort();
+  const insights = useMemo(
+    () => computeInsights(filtered, timeZone),
+    [filtered, timeZone],
+  );
+  const stopOutDates = new Set(
+    Object.entries(insights.dayFlags)
+      .filter(([, flags]) => flags.includes("stop_out_day"))
+      .map(([date]) => date),
+  );
+  const patternRows = [...TRADE_INSIGHTS, ...DAY_INSIGHTS]
+    .map((def) => {
+      const ids = insightTradeIds(insights, filtered, timeZone, def.id);
+      const subset = filtered.filter((t) => ids.includes(t.id));
+      const dayCount = Object.values(insights.dayFlags).filter((flags) =>
+        flags.includes(def.id as never),
+      ).length;
+      const isDay = DAY_INSIGHTS.some((d) => d.id === def.id);
+      return {
+        id: def.id as InsightId,
+        label: def.label,
+        count: isDay ? dayCount : subset.length,
+        unit: isDay ? "Day" : "Trade",
+        net: subset.reduce((s, t) => s + t.net, 0),
+      };
+    })
+    .filter((row) => row.count > 0)
+    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
+    .slice(0, 5);
 
   function setFilter<K extends keyof TradeFilters>(key: K, value: TradeFilters[K]) {
     setFilters((f) => ({ ...f, [key]: value }));
@@ -181,6 +217,18 @@ export function Dashboard({
           <option value="loss">Loss</option>
           <option value="breakeven">Breakeven</option>
         </select>
+        <select
+          value={filters.insight}
+          onChange={(e) => setFilter("insight", e.target.value)}
+          className="rounded-lg bg-surface px-3 py-1.5 ring-1 ring-line"
+        >
+          <option value="">+ Insight</option>
+          {[...TRADE_INSIGHTS, ...DAY_INSIGHTS].map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.label}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           onClick={() => setHide((v) => !v)}
@@ -251,16 +299,45 @@ export function Dashboard({
           hide={hide}
           onPrev={() => shiftMonth(-1)}
           onNext={() => shiftMonth(1)}
+          stopOutDates={stopOutDates}
         />
         <section className="rounded-xl bg-surface p-5 ring-1 ring-line">
-          <h2 className="text-[16px] font-semibold">
-            Daily P&L · {monthLabel(month.year, month.index)}
-          </h2>
-          <div className="mt-4">
-            <DailyBars days={monthDays} hide={hide} />
+          <div className="flex items-center justify-between">
+            <h2 className="text-[16px] font-semibold">Patterns</h2>
+            <Link href="/reports" className="text-[13px] text-[#9ec1ff]">
+              All insights
+            </Link>
+          </div>
+          <div className="mt-3 space-y-2">
+            {patternRows.map((row) => (
+              <Link
+                key={row.id}
+                href={`/trades?insight=${row.id}`}
+                className="flex items-center justify-between rounded-lg bg-canvas px-3 py-2.5 ring-1 ring-line"
+              >
+                <div>
+                  <p className="text-[13.5px]">{row.label}</p>
+                  <p className="text-[12px] text-faint">
+                    {row.count} {row.unit.toLowerCase()}
+                    {row.count === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <span className={`tabular-nums ${moneyClass(row.net)}`}>
+                  {hide ? "••••" : formatMoney(row.net)}
+                </span>
+              </Link>
+            ))}
           </div>
         </section>
       </div>
+      <section className="mt-4 rounded-xl bg-surface p-5 ring-1 ring-line">
+        <h2 className="text-[16px] font-semibold">
+          Daily P&L · {monthLabel(month.year, month.index)}
+        </h2>
+        <div className="mt-4">
+          <DailyBars days={monthDays} hide={hide} />
+        </div>
+      </section>
 
       <section className="mt-4 rounded-xl bg-surface p-5 ring-1 ring-line">
         <div className="flex items-center justify-between">

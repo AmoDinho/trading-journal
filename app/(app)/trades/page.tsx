@@ -8,10 +8,10 @@ import { loadTradeLog } from "@/lib/trade-query";
 export default async function TradesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; insight?: string }>;
 }) {
   const session = await requireSession();
-  const { date } = await searchParams;
+  const { date, insight } = await searchParams;
   await ensureJournalDefaults(session.user.id);
   const { trades, accounts, playbooks, tags } = await loadTradeLog(session.user.id);
   const timeZone =
@@ -39,6 +39,7 @@ export default async function TradesPage({
       tags={tags}
       timeZone={timeZone}
       initialDate={date ?? ""}
+      initialInsight={insight ?? ""}
     />
   );
 }

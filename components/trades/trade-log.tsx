@@ -21,6 +21,7 @@ import {
   moneyClass,
   rMultiple,
 } from "@/lib/format";
+import { computeInsights, INSIGHT_LABEL, type InsightId } from "@/lib/insights";
 import type { TradeRow } from "@/lib/trade-query";
 
 export function TradeLog({
@@ -30,6 +31,7 @@ export function TradeLog({
   tags,
   timeZone,
   initialDate = "",
+  initialInsight = "",
 }: {
   trades: TradeRow[];
   accounts: { id: string; name: string }[];
@@ -37,12 +39,14 @@ export function TradeLog({
   tags: { id: string; category: string; name: string }[];
   timeZone: string;
   initialDate?: string;
+  initialInsight?: string;
 }) {
   const [trades, setTrades] = useState(initial);
   const [allTags, setAllTags] = useState(tags);
   const [filters, setFilters] = useState<TradeFilters>({
     ...EMPTY_FILTERS,
     date: initialDate,
+    insight: initialInsight,
   });
   const [openId, setOpenId] = useState<string | null>(null);
   const [cursor, setCursor] = useState(0);
@@ -53,6 +57,10 @@ export function TradeLog({
   );
   const stats = filterStats(filtered);
   const symbols = [...new Set(trades.map((t) => t.symbol))].sort();
+  const insightResult = useMemo(
+    () => computeInsights(trades, timeZone),
+    [trades, timeZone],
+  );
 
   const openIndex = openId
     ? filtered.findIndex((t) => t.id === openId)
@@ -141,6 +149,15 @@ export function TradeLog({
               className="rounded-lg bg-surface px-3 py-1.5 ring-1 ring-fg/40"
             >
               {filters.date} ×
+            </button>
+          ) : null}
+          {filters.insight ? (
+            <button
+              type="button"
+              onClick={() => setFilter("insight", "")}
+              className="rounded-lg bg-surface px-3 py-1.5 ring-1 ring-fg/40"
+            >
+              {INSIGHT_LABEL[filters.insight as InsightId] ?? filters.insight} ×
             </button>
           ) : null}
           <select
@@ -309,6 +326,7 @@ export function TradeLog({
               current.some((t) => t.id === tag.id) ? current : [...current, tag],
             )
           }
+          insights={insightResult.tradeFlags[openTrade.id] ?? []}
         />
       ) : null}
     </div>
