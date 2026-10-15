@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   cashFlow,
+  importBatch,
   playbook,
   tag,
   trade,
@@ -9,6 +10,7 @@ import {
   tradingAccount,
 } from "@/lib/db/schema";
 import { tradeNet } from "@/lib/format";
+import { historyVisible } from "@/lib/imports";
 
 export type TradeRow = {
   id: string;
@@ -43,7 +45,8 @@ export async function loadTradeLog(userId: string) {
     })
     .from(trade)
     .innerJoin(tradingAccount, eq(trade.accountId, tradingAccount.id))
-    .where(eq(trade.userId, userId));
+    .leftJoin(importBatch, eq(trade.importId, importBatch.id))
+    .where(and(eq(trade.userId, userId), historyVisible(trade.importId)));
 
   const tagRows = await db
     .select({
@@ -115,22 +118,23 @@ export async function loadTradeLog(userId: string) {
     .where(eq(tag.userId, userId));
 
   const flows = await db
-    .select()
+    .select({ flow: cashFlow })
     .from(cashFlow)
-    .where(eq(cashFlow.userId, userId));
+    .leftJoin(importBatch, eq(cashFlow.importId, importBatch.id))
+    .where(and(eq(cashFlow.userId, userId), historyVisible(cashFlow.importId)));
 
   return {
     trades,
     accounts,
     playbooks,
     tags,
-    cashFlows: flows.map((f) => ({
-      id: f.id,
-      accountId: f.accountId,
-      type: f.type,
-      amount: Number(f.amount),
-      time: f.time.toISOString(),
-      comment: f.comment,
+    cashFlows: flows.map(({ flow }) => ({
+      id: flow.id,
+      accountId: flow.accountId,
+      type: flow.type,
+      amount: Number(flow.amount),
+      time: flow.time.toISOString(),
+      comment: flow.comment,
     })),
   };
 }

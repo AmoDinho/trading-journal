@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { tag, trade, tradeTag } from "@/lib/db/schema";
+import { importBatch, tag, trade, tradeTag } from "@/lib/db/schema";
+import { historyVisible } from "@/lib/imports";
 
 const bodySchema = z.object({
   category: z.enum(["setup", "mistakes", "emotions"]),
@@ -53,7 +54,14 @@ export async function POST(request: Request) {
     const [owned] = await db
       .select({ id: trade.id })
       .from(trade)
-      .where(and(eq(trade.id, tradeId), eq(trade.userId, session.user.id)))
+      .leftJoin(importBatch, eq(trade.importId, importBatch.id))
+      .where(
+        and(
+          eq(trade.id, tradeId),
+          eq(trade.userId, session.user.id),
+          historyVisible(trade.importId),
+        ),
+      )
       .limit(1);
     if (owned) {
       await db
