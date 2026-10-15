@@ -22,6 +22,7 @@ type Account = {
 
 type PastImport = {
   id: string;
+  accountId: string;
   createdAt: string;
   filename: string;
   format: string;
@@ -49,6 +50,7 @@ export function ImportWizard({
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [parsed, setParsed] = useState<{
     report: ParsedReport;
     meta: FileMeta;
@@ -102,6 +104,24 @@ export function ImportWizard({
       setError(err instanceof Error ? err.message : "Could not read file");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function removeImport(row: PastImport) {
+    const ok = window.confirm(
+      `Remove ${row.filename}? Trades from this upload will be hidden and left out of stats. Importing the report again brings them back.`,
+    );
+    if (!ok) return;
+    setRemovingId(row.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/imports/${row.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Could not remove import");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove import");
+    } finally {
+      setRemovingId(null);
     }
   }
 
@@ -335,22 +355,39 @@ export function ImportWizard({
               <thead className="text-[11px] tracking-wide text-faint uppercase">
                 <tr>
                   <th className="py-2 font-medium">When</th>
+                  <th className="font-medium">File</th>
                   <th className="font-medium">Account</th>
                   <th className="font-medium">Format</th>
                   <th className="font-medium">In file</th>
                   <th className="font-medium">New</th>
                   <th className="font-medium">Warnings</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
                 {pastImports.map((row) => (
                   <tr key={row.id} className="border-t border-line">
                     <td className="py-2.5">{formatWhen(row.createdAt)}</td>
-                    <td>{account?.name ?? "Personal"}</td>
+                    <td className="max-w-[180px] truncate">{row.filename}</td>
+                    <td>
+                      {accounts.find((a) => a.id === row.accountId)?.name ??
+                        account?.name ??
+                        "Personal"}
+                    </td>
                     <td>{row.format.toUpperCase()}</td>
                     <td>{row.positionsInFile}</td>
                     <td>{row.newTrades}</td>
                     <td>{row.warnings}</td>
+                    <td className="text-right">
+                      <button
+                        type="button"
+                        disabled={removingId === row.id}
+                        onClick={() => void removeImport(row)}
+                        className="text-[12.5px] text-faint hover:text-loss disabled:opacity-50"
+                      >
+                        {removingId === row.id ? "Removing…" : "Remove"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -376,7 +413,9 @@ export function ImportWizard({
         </ol>
         <p className="mt-4 rounded-lg bg-canvas px-3 py-2 text-[12.5px] text-faint">
           Re-importing overlapping reports is safe: duplicates are skipped by
-          position id.
+          position id. Removing an upload hides it from the journal and stats
+          without deleting the rows. Importing that report again brings them
+          back.
         </p>
         <p className="mt-3 text-[12.5px] text-faint">
           Terminal must be in English. .xlsx, .csv and .html up to 20 MB.

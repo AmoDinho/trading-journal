@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { ImportWizard } from "@/components/import/wizard";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/lib/db";
@@ -20,6 +20,7 @@ export default async function ImportPage() {
   const pastImports = await db
     .select({
       id: importBatch.id,
+      accountId: importBatch.accountId,
       createdAt: importBatch.createdAt,
       filename: importBatch.filename,
       format: importBatch.format,
@@ -28,7 +29,9 @@ export default async function ImportPage() {
       warnings: importBatch.warnings,
     })
     .from(importBatch)
-    .where(eq(importBatch.userId, session.user.id))
+    .where(
+      and(eq(importBatch.userId, session.user.id), isNull(importBatch.deletedAt)),
+    )
     .orderBy(desc(importBatch.createdAt))
     .limit(20);
 

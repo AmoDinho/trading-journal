@@ -32,8 +32,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     positionsInFile: parsed.data.trades.length,
-    newTrades: diff.newTrades.length,
+    newTrades: diff.newTrades.length + diff.restoredTradeIds.length,
     alreadyImported: diff.alreadyImported,
-    newCashFlows: diff.newCashFlows.length,
+    newCashFlows: diff.newCashFlows.length + diff.restoredFlowIds.length,
   });
 }

@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { playbook, tag, trade, tradeTag } from "@/lib/db/schema";
+import { importBatch, playbook, tag, trade, tradeTag } from "@/lib/db/schema";
+import { historyVisible } from "@/lib/imports";
 
 const patchSchema = z.object({
   initialStop: z.number().positive().nullable().optional(),
@@ -30,9 +31,16 @@ export async function PATCH(
   }
 
   const [existing] = await db
-    .select()
+    .select({ id: trade.id })
     .from(trade)
-    .where(and(eq(trade.id, id), eq(trade.userId, session.user.id)))
+    .leftJoin(importBatch, eq(trade.importId, importBatch.id))
+    .where(
+      and(
+        eq(trade.id, id),
+        eq(trade.userId, session.user.id),
+        historyVisible(trade.importId),
+      ),
+    )
     .limit(1);
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

@@ -105,6 +105,7 @@ export const importBatch = pgTable("import_batch", {
   newCashFlows: integer("new_cash_flows").notNull(),
   warnings: integer("warnings").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const trade = pgTable(
